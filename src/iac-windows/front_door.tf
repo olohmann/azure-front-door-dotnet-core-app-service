@@ -12,7 +12,7 @@ resource "azurerm_frontdoor" "fd" {
   routing_rule {
     name               = "routing-rule"
     accepted_protocols = ["Https"]
-    patterns_to_match  = ["/"]
+    patterns_to_match  = ["/*"]
     frontend_endpoints = [local.frontend_endpoint_name_default]
     forwarding_configuration {
       forwarding_protocol = "MatchRequest"
@@ -40,8 +40,8 @@ resource "azurerm_frontdoor" "fd" {
   backend_pool {
     name = "backend"
     backend {
-      host_header = azurerm_app_service.webapp.default_site_hostname
-      address     = azurerm_app_service.webapp.default_site_hostname
+      host_header = local.app_service_fqdn
+      address     = local.app_service_fqdn
       http_port   = 80
       https_port  = 443
     }
@@ -51,7 +51,7 @@ resource "azurerm_frontdoor" "fd" {
 
   backend_pool_health_probe {
     name     = "health-probe"
-    path     = "/"
+    path     = "/health"
     protocol = "Https"
   }
 
