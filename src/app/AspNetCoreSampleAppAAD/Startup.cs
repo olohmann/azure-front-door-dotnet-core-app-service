@@ -65,9 +65,6 @@ namespace AspNetCoreSampleAppAAD
             {
                 app.Use(async (context, next) =>
                 {
-                    logger.LogDebug("Abort request due to missing X-Azure-FDID", 
-                        context.Connection.RemoteIpAddress);
-
                     context.Request.Headers.TryGetValue("X-Azure-FDID", out var actualFdid);
                     if (actualFdid == expectedFdid)
                     {
@@ -75,6 +72,8 @@ namespace AspNetCoreSampleAppAAD
                     }
                     else
                     {
+                        logger.LogWarning("Abort request due to missing X-Azure-FDID", 
+                            context.Connection.RemoteIpAddress);
                         context.Response.StatusCode = (int) HttpStatusCode.BadGateway;
                         await context.Response.WriteAsync("Bad Gateway");
                     }
