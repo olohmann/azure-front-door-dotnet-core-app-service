@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -50,9 +51,12 @@ namespace AspNetCoreSampleAppAAD
                     options.RequireHeaderSymmetry = false;
                     options.ForwardLimit = null;
 
-                    // Azure Front Door
-                    // See: https://docs.microsoft.com/en-us/azure/frontdoor/front-door-faq#how-do-i-lock-down-the-access-to-my-backend-to-only-azure-front-door 
-                    options.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("147.243.0.0"), 16));
+                    // Only loopback proxies are allowed by default.
+                    // Clear that restriction because forwarders are enabled by explicit 
+                    // configuration.
+                    // Network mitigation is being handled via AppService Network Restrictions.
+                    options.KnownNetworks.Clear();
+                    options.KnownProxies.Clear();
                 });
             }
 
@@ -66,7 +70,7 @@ namespace AspNetCoreSampleAppAAD
             if (!_env.IsDevelopment())
             {
                 // Ensure the "right" Front Door is calling.
-                var expectedFdid = Configuration.GetValue<string>("X-Azure-FDID");
+                var expectedFdid = Configuration.GetValue<string>("X_AZURE_FDID");
                 if (!string.IsNullOrWhiteSpace(expectedFdid))
                 {
                     app.Use(async (context, next) =>
@@ -88,7 +92,39 @@ namespace AspNetCoreSampleAppAAD
                 
                 app.UseForwardedHeaders();
             }
+            
+            var debugReverseProxy = Configuration.GetValue<string>("DEBUG_REVERSE_PROXY");
+            if (!string.IsNullOrWhiteSpace(debugReverseProxy))
+            {
+                app.Run(async (context) =>
+                {
+                    context.Response.ContentType = "text/plain";
 
+                    // Request method, scheme, and path
+                    await context.Response.WriteAsync(
+                        $"Request Method: {context.Request.Method}{Environment.NewLine}");
+                    await context.Response.WriteAsync(
+                        $"Request Scheme: {context.Request.Scheme}{Environment.NewLine}");
+                    await context.Response.WriteAsync(
+                        $"Request Path: {context.Request.Path}{Environment.NewLine}");
+
+                    // Headers
+                    await context.Response.WriteAsync($"Request Headers:{Environment.NewLine}");
+
+                    foreach (var header in context.Request.Headers)
+                    {
+                        await context.Response.WriteAsync($"{header.Key}: " +
+                                                          $"{header.Value}{Environment.NewLine}");
+                    }
+
+                    await context.Response.WriteAsync(Environment.NewLine);
+
+                    // Connection: RemoteIp
+                    await context.Response.WriteAsync(
+                        $"Request RemoteIp: {context.Connection.RemoteIpAddress}");
+                }); 
+            }
+            
             app.UseHealthChecks("/health");
             
             if (_env.IsDevelopment())

@@ -7,7 +7,9 @@ resource "azurerm_app_service_plan" "sp" {
   name                = "${local.prefix_kebab}-asp"
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
-  kind                = "Windows"
+  kind                = "Linux"
+
+  reserved = true
 
   sku {
     tier = "Standard"
@@ -23,15 +25,20 @@ resource "azurerm_app_service" "webapp" {
   https_only          = true
 
   app_settings = {
-    "WEBSITE_RUN_FROM_PACKAGE" = "1"
-    "AzureAd__Domain"          = local.frontdoor_default_hostname
-    "X_AZURE_FDID"             = azurerm_frontdoor.fd.header_frontdoor_id
+    AzureAd__Domain                     = local.frontdoor_default_hostname
+    WEBSITES_ENABLE_APP_SERVICE_STORAGE = false
+    DOCKER_REGISTRY_SERVER_URL          = "https://${azurerm_container_registry.acr.name}.azurecr.io"
+    DOCKER_REGISTRY_SERVER_USERNAME     = azurerm_container_registry.acr.admin_username
+    DOCKER_REGISTRY_SERVER_PASSWORD     = azurerm_container_registry.acr.admin_password
+    X_AZURE_FDID                        = azurerm_frontdoor.fd.header_frontdoor_id
+    WEBSITES_PORT                       = "8080"
   }
 
   site_config {
-    always_on     = true
-    http2_enabled = true
-    ftps_state    = "Disabled"
+    linux_fx_version = "DOCKER|nginx"
+    always_on        = true
+    http2_enabled    = true
+    ftps_state       = "Disabled"
 
     // IP Restrictions for Azure Front Door: https://docs.microsoft.com/en-us/azure/frontdoor/front-door-faq#how-do-i-lock-down-the-access-to-my-backend-to-only-azure-front-door
     ip_restriction {
@@ -49,5 +56,9 @@ resource "azurerm_app_service" "webapp" {
     ip_restriction {
       ip_address = "169.254.169.254/32"
     }
+  }
+
+  lifecycle {
+    ignore_changes = [site_config[0].linux_fx_version]
   }
 }
